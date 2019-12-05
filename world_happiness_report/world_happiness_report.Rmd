@@ -1,0 +1,108 @@
+---
+title: "World Happiness Report"
+output: 
+  html_document: 
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+... add some intro ...
+https://www.kaggle.com/unsdsn/world-happiness
+
+
+
+## Reading and binding the datasets
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+
+files <- list.files("data", pattern = "*.csv", full.names = TRUE)
+data_list <- sapply(files, read_csv)
+
+data_list$`data/2018.csv` <- data_list$`data/2018.csv` %>% 
+     mutate(`Perceptions of corruption` = as.numeric(`Perceptions of corruption`))
+
+data <- bind_rows(data_list, .id = "year")
+data$year <- gsub("\\D", "", x = data$year)
+
+```
+
+## Merging corresponding variables together
+Many corresponding variables are named differently across the original datasets, so there is some tidying to be done.
+
+```{r}
+happiness <- data %>% 
+     mutate(gdp_pc = rowSums(data[, c("Economy (GDP per Capita)",
+                                      "Economy..GDP.per.Capita.",
+                                      "GDP per capita")],
+                             na.rm = TRUE)) %>% 
+     select(-c("Economy (GDP per Capita)",
+               "Economy..GDP.per.Capita.",
+               "GDP per capita")) %>% 
+     mutate(happiness_rank = rowSums(data[, c("Happiness Rank",
+                                              "Happiness.Rank",
+                                              "Overall rank")],
+                                     na.rm = TRUE)) %>% 
+     select(-c("Happiness Rank",
+               "Happiness.Rank",
+               "Overall rank")) %>% 
+     mutate(happiness_score = rowSums(data[, c("Happiness Score",
+                                               "Happiness.Score",
+                                               "Score")],
+                                      na.rm = TRUE)) %>% 
+     select(-c("Happiness Score",
+               "Happiness.Score",
+               "Score")) %>%
+     mutate(health_life_exp = rowSums(data[, c("Health (Life Expectancy)",
+                                               "Health..Life.Expectancy.", 
+                                               "Healthy life expectancy")],
+                                      na.rm = TRUE)) %>% 
+     select(-c("Health (Life Expectancy)",
+               "Health..Life.Expectancy.", 
+               "Healthy life expectancy")) %>% 
+     mutate(corruption = rowSums(data[, c("Trust (Government Corruption)",
+                                          "Trust..Government.Corruption.", 
+                                          "Perceptions of corruption")],
+                                 na.rm = TRUE)) %>% 
+     select(-c("Trust (Government Corruption)",
+               "Trust..Government.Corruption.", 
+               "Perceptions of corruption")) %>%
+     mutate(freedom = rowSums(data[, c("Freedom",
+                                       "Freedom to make life choices")],
+                              na.rm = TRUE)) %>% 
+     select(-c("Freedom",
+               "Freedom to make life choices")) %>%
+     mutate(dystopia_residual = rowSums(data[, c("Dystopia Residual",
+                                                 "Dystopia.Residual")],
+                                        na.rm = TRUE)) %>% 
+     select(-c("Dystopia Residual",
+               "Dystopia.Residual")) %>%
+     
+     # the following step is legitimate because there are only countries in "country or region"
+     mutate(country = ifelse(is.na(Country), `Country or region`, Country)) %>%
+     select(-c(Country, `Country or region`)) %>% 
+     
+     # dropping the following columns because 
+     # (a) only one dataset indicates the Standard Error and
+     # (b) the nature of the confidence intervals is uncertain (even though it is probably +/- 1 SE)
+     select(-c("Standard Error",
+               "Upper Confidence Interval",
+               "Lower Confidence Interval",
+               "Whisker.low",
+               "Whisker.high")) %>%
+     
+     # consistent names
+     rename(region = Region,
+            social_support = "Social support",
+            family = Family,
+            generosity = Generosity)
+```
+
+
+## Exploring the data
+
+... work in progress ...
