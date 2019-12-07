@@ -6,7 +6,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 ```
 
 
@@ -16,9 +16,11 @@ https://www.kaggle.com/unsdsn/world-happiness
 
 
 ## Reading and binding the datasets
+The data is provided in 5 datasets, one per year (2015-2019).
 
 ```{r, message=FALSE, warning=FALSE}
 library(tidyverse)
+library(knitr)
 
 files <- list.files("data", pattern = "*.csv", full.names = TRUE)
 data_list <- sapply(files, read_csv)
@@ -27,7 +29,7 @@ data_list$`data/2018.csv` <- data_list$`data/2018.csv` %>%
      mutate(`Perceptions of corruption` = as.numeric(`Perceptions of corruption`))
 
 data <- bind_rows(data_list, .id = "year")
-data$year <- gsub("\\D", "", x = data$year)
+data$year <- gsub("\\D", "", x = data$year) %>% as.numeric()
 
 ```
 
@@ -35,7 +37,7 @@ data$year <- gsub("\\D", "", x = data$year)
 Many corresponding variables are named differently across the original datasets, so there is some tidying to be done.
 
 ```{r}
-happiness <- data %>% 
+hrep <- data %>% 
      mutate(gdp_pc = rowSums(data[, c("Economy (GDP per Capita)",
                                       "Economy..GDP.per.Capita.",
                                       "GDP per capita")],
@@ -105,4 +107,83 @@ happiness <- data %>%
 
 ## Exploring the data
 
-... work in progress ...
+### What are the top 10 happiest countries overall?
+
+```{r}
+hrep %>%
+  group_by(country) %>% 
+  summarise(hp_avg = round(mean(happiness_score), 2)) %>% 
+  arrange(desc(hp_avg)) %>% 
+  top_n(10) %>%
+  kable()
+
+```
+
+### What countries' happiness scores changed most across the 5 years?
+
+```{r}
+highvar_countries <- hrep %>% 
+  group_by(country) %>% 
+  summarise(hp_var = var(happiness_score)) %>% 
+  arrange(desc(hp_var)) %>% 
+  top_n(5)
+
+highvar_countries %>% 
+  kable()
+```
+
+```{r}
+hrep %>% 
+  filter(country %in% highvar_countries$country) %>% 
+  ggplot(aes(x = year, y = happiness_score,
+             col = fct_reorder2(country, year, happiness_score))) + 
+  geom_line() +
+  labs(y = "hapiness score", col = "country",
+       title = "Top 5 countries with the highest changes in happiness scores")
+```
+
+
+### Variables associated with happiness score
+
+Let's look at the variables associated with the happiness score. In this dataset, they are represented in a somewhat peculiar way. According to the description on Kaggle the variables add up to the happiness score and represent the "extent to which these factors contribute in evaluating the happiness in each country". 
+
+First of all, let's check if the first statement holds true. Do the variables add up to the happiness score?
+
+```{r}
+hrep_checksums <- tibble(scores = hrep$happiness_score,
+           sums = rowSums(hrep[, c("family", "generosity", "social_support", "gdp_pc", "corruption", "freedom", "dystopia_residual")], na.rm = TRUE))
+
+head(hrep_checksums)
+```
+
+As can be seen at the top of the dataset there are at least some cases where the variables do not add up to the happiness score. Does this apply to other cases as well?
+
+```{r}
+mean(hrep_checksums$scores == hrep_checksums$sums)
+```
+
+It turns out the variables never add up to the happiness score. Are we missing a variable, which could be the case if the sum is always smaller than the score?
+
+```{r}
+mean(hrep_checksums$sums < hrep_checksums$scores)
+```
+
+In the vast majority of cases, the actual score is larger than the sum. Let's look at the exceptions:
+
+```{r}
+hrep_checksums %>% 
+  slice(which(hrep_checksums$scores < hrep_checksums$sums)) %>%
+  kable()
+```
+
+In the two exceptions the variables almost add up to the happiness score.
+
+Let's look at the average difference between the sums and the scores.
+
+```{r}
+mean(hrep_checksums$scores - hrep_checksums$sums)
+```
+
+
+## Conclusion
+Overall, there is a substantial difference between the happiness scores and the sums of the explaining variables. Accordingly, the statement about the explaining variables' scales does not hold true. This prevents further analyses as we cannot be certain about the nature and composition of these variables. In a real-world scenario, one might want to gather further information on the way the data was gathered and the variables were computed.
